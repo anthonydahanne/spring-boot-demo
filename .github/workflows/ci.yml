@@ -17,6 +17,7 @@ on:
 jobs:
   build:
 
+    # that requires a self-hosted runner with tag "arm64" bound to this repo
     runs-on: arm64
 
     steps:
@@ -31,6 +32,34 @@ jobs:
       run: ./mvnw -B package --file pom.xml
     - name: Create JVM based container image with spring maven plugin
       run: ./mvnw -B spring-boot:build-image --file pom.xml
+
+    - name: Run image and asserts application starts up properly
+      run: |
+        docker run --rm --name=spring-boot-demo-arm64 -d -p 8080:8080 spring-boot-demo-arm64:0.0.1-SNAPSHOT
+        sleep 5
+        docker logs -f spring-boot-demo-arm64 &> container.logs &
+        
+        counter=0
+        while [ $counter -lt 10 ]
+        do
+          response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/actuator/health)
+          if [ $response -eq 200 ]; then
+            echo "HTTP 200 OK, app is started properly"
+            echo "shutting down the app"
+            response=$(curl -X POST -s -o /dev/null -w "%{http_code}" localhost:8080/actuator/shutdown)
+            if [ $response -eq 200 ]; then
+              echo "HTTP 200 OK, app shutting now"
+            fi
+            sleep 1
+            cat container.logs
+            exit 0
+          fi
+          counter=$((counter+1))
+          sleep 1
+        done
+        echo "Request failed: HTTP $response, app was never ready"
+        cat container.logs
+        exit 1
 
     # Optional: Uploads the full dependency graph to GitHub to improve the quality of Dependabot alerts this repository can receive
 #    - name: Update dependency graph

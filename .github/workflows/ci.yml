@@ -52,11 +52,50 @@ jobs:
           -Dspring-boot.build-image.imageName="${{ env.REGISTRY }}/${{ github.repository }}:jvm" \
           -DskipTests
 
-    - name: Run image and asserts application starts up properly
+    - name: Run JVM based image and asserts application starts up properly
       run: |
-        docker run --rm --name=spring-boot-demo-arm64 -d -p 8080:8080 spring-boot-demo-arm64:0.0.1-SNAPSHOT
+        docker run --rm --name=spring-boot-demo-arm64-jvm -d -p 8080:8080 ${{ env.REGISTRY }}/${{ github.repository }}:jvm
         sleep 5
-        docker logs -f spring-boot-demo-arm64 &> container.logs &
+        docker logs -f spring-boot-demo-arm64-jvm &> container.logs &
+        
+        counter=0
+        while [ $counter -lt 10 ]
+        do
+          response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/actuator/health)
+          if [ $response -eq 200 ]; then
+            echo "HTTP 200 OK, app is started properly"
+            echo "shutting down the app"
+            response=$(curl -X POST -s -o /dev/null -w "%{http_code}" localhost:8080/actuator/shutdown)
+            if [ $response -eq 200 ]; then
+              echo "HTTP 200 OK, app shutting now"
+            fi
+            sleep 1
+            cat container.logs
+            exit 0
+          fi
+          counter=$((counter+1))
+          sleep 1
+        done
+        echo "Request failed: HTTP $response, app was never ready"
+        cat container.logs
+        exit 1
+
+
+    - name: Create and publish native container image with spring maven plugin
+      run: |
+        ./mvnw -P native spring-boot:build-image \
+          -Ddocker.publishRegistry.username=${{ github.actor }} \
+          -Ddocker.publishRegistry.password=${{ secrets.GITHUBTOKEN }} \
+          -Ddocker.publishRegistry.url=${{ env.REGISTRY }} \
+          -Dspring-boot.build-image.publish=true \
+          -Dspring-boot.build-image.imageName="${{ env.REGISTRY }}/${{ github.repository }}:native" \
+          -DskipTests
+
+    - name: Run native image and asserts application starts up properly
+      run: |
+        docker run --rm --name=spring-boot-demo-arm64-native -d -p 8080:8080 ${{ env.REGISTRY }}/${{ github.repository }}:native
+        sleep 5
+        docker logs -f spring-boot-demo-arm64-native &> container.logs &
         
         counter=0
         while [ $counter -lt 10 ]

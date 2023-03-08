@@ -48,16 +48,16 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
-                    <docker>
-                        <publishRegistry>
-                            <url>${docker.publishRegistry.url}</url>
-                            <username>${docker.publishRegistry.username}</username>
-                            <password>${docker.publishRegistry.password}</password>
-                        </publishRegistry>
-                    </docker>
                     <image>
                         <verboseLogging>true</verboseLogging>
-                        <builder>dashaun/builder:tiny</builder>
+                        <builder>paketobuildpacks/builder:base</builder>
+                        <buildpacks>
+                            <buildpack>paketo-buildpacks/executable-jar</buildpack>
+                            <buildpack>paketo-buildpacks/bellsoft-liberica</buildpack>
+                            <buildpack>paketo-buildpacks/syft</buildpack>
+                            <buildpack>anthonydahanne/fix:220</buildpack>
+                            <buildpack>paketo-buildpacks/spring-boot</buildpack>
+                        </buildpacks>
                     </image>
                 </configuration>
             </plugin>

@@ -10,19 +10,13 @@ name: Java CI with Maven
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+    branches: [ "fix-220" ]
 
 jobs:
   build:
 
     # that requires a self-hosted runner with tag "arm64" bound to this repo
-    runs-on: arm64
+    runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v3
@@ -35,90 +29,7 @@ jobs:
     - name: Test and Build with Maven
       run: ./mvnw -B package --file pom.xml
 
-    - name: Log in to the GH Container registry
-      uses: docker/login-action@v2
-      with:
-        registry: ${{ env.REGISTRY }}
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUBTOKEN }}
-
-    - name: Create and publish JVM based container image with spring maven plugin
-      run: |
-        ./mvnw spring-boot:build-image \
-          -Ddocker.publishRegistry.username=${{ github.actor }} \
-          -Ddocker.publishRegistry.password=${{ secrets.GITHUBTOKEN }} \
-          -Ddocker.publishRegistry.url=${{ env.REGISTRY }} \
-          -Dspring-boot.build-image.publish=true \
-          -Dspring-boot.build-image.imageName="${{ env.REGISTRY }}/${{ github.repository }}:jvm" \
-          -DskipTests
-
-    - name: Run JVM based image and asserts application starts up properly
-      run: |
-        docker run --rm --name=spring-boot-demo-arm64-jvm -d -p 8080:8080 ${{ env.REGISTRY }}/${{ github.repository }}:jvm
-        sleep 5
-        docker logs -f spring-boot-demo-arm64-jvm &> container.logs &
-        
-        counter=0
-        while [ $counter -lt 10 ]
-        do
-          response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/actuator/health)
-          if [ $response -eq 200 ]; then
-            echo "HTTP 200 OK, app is started properly"
-            echo "shutting down the app"
-            response=$(curl -X POST -s -o /dev/null -w "%{http_code}" localhost:8080/actuator/shutdown)
-            if [ $response -eq 200 ]; then
-              echo "HTTP 200 OK, app shutting now"
-            fi
-            sleep 1
-            cat container.logs
-            exit 0
-          fi
-          counter=$((counter+1))
-          sleep 1
-        done
-        echo "Request failed: HTTP $response, app was never ready"
-        cat container.logs
-        exit 1
-
-
     - name: Create and publish native container image with spring maven plugin
       run: |
         ./mvnw -P native spring-boot:build-image \
-          -Ddocker.publishRegistry.username=${{ github.actor }} \
-          -Ddocker.publishRegistry.password=${{ secrets.GITHUBTOKEN }} \
-          -Ddocker.publishRegistry.url=${{ env.REGISTRY }} \
-          -Dspring-boot.build-image.publish=true \
-          -Dspring-boot.build-image.imageName="${{ env.REGISTRY }}/${{ github.repository }}:native" \
           -DskipTests
-
-    - name: Run native image and asserts application starts up properly
-      run: |
-        docker run --rm --name=spring-boot-demo-arm64-native -d -p 8080:8080 ${{ env.REGISTRY }}/${{ github.repository }}:native
-        sleep 5
-        docker logs -f spring-boot-demo-arm64-native &> container.logs &
-        
-        counter=0
-        while [ $counter -lt 10 ]
-        do
-          response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/actuator/health)
-          if [ $response -eq 200 ]; then
-            echo "HTTP 200 OK, app is started properly"
-            echo "shutting down the app"
-            response=$(curl -X POST -s -o /dev/null -w "%{http_code}" localhost:8080/actuator/shutdown)
-            if [ $response -eq 200 ]; then
-              echo "HTTP 200 OK, app shutting now"
-            fi
-            sleep 1
-            cat container.logs
-            exit 0
-          fi
-          counter=$((counter+1))
-          sleep 1
-        done
-        echo "Request failed: HTTP $response, app was never ready"
-        cat container.logs
-        exit 1
-
-    # Optional: Uploads the full dependency graph to GitHub to improve the quality of Dependabot alerts this repository can receive
-#    - name: Update dependency graph
-#      uses: advanced-security/maven-dependency-submission-action@571e99aab1055c2e71a1e2309b9691de18d6b7d6

@@ -50,15 +50,16 @@
                 <configuration>
                     <image>
                         <verboseLogging>true</verboseLogging>
-                        <builder>paketobuildpacks/builder:base</builder>
+                        <builder>paketobuildpacks/builder:0.2.316-full</builder>
                         <buildpacks>
-                            <buildpack>paketo-buildpacks/executable-jar</buildpack>
-                            <buildpack>paketo-buildpacks/bellsoft-liberica</buildpack>
                             <buildpack>paketo-buildpacks/syft</buildpack>
-                            <buildpack>anthonydahanne/fix:220</buildpack>
+                            <buildpack>paketo-buildpacks/bellsoft-liberica</buildpack>
+                            <buildpack>paketo-buildpacks/executable-jar</buildpack>
                             <buildpack>paketo-buildpacks/spring-boot</buildpack>
+                            <buildpack>anthonydahanne/fix:220</buildpack>
                         </buildpacks>
                     </image>
+                    <pullPolicy>IF_NOT_PRESENT</pullPolicy>
                 </configuration>
             </plugin>
         </plugins>

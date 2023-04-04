@@ -11,6 +11,8 @@ name: Spring Boot Paketo Buildpack Builds with Maven on Windows
 on:
   schedule:
     - cron: "15,45 * * * *"
+  push:
+    branches: [ "main" ]
 
 jobs:
   windows:
@@ -27,10 +29,17 @@ jobs:
 
     - name: Clean Docker Daemon
       run: docker system prune -a -f --volumes
+      
+    - name: Get pack cli for windows
+      run: |
+        Invoke-WebRequest -Uri https://github.com/buildpacks/pack/releases/download/v0.29.0/pack-v0.29.0-windows.zip -OutFile pack-v0.29.0-windows.zip
+        Add-Type -AssemblyName System.IO.Compression.FileSystem ; [System.IO.Compression.ZipFile]::ExtractToDirectory("$PWD/pack-v0.29.0-windows.zip", "$PWD/pack")
 
-    - name: Test and Build with Maven
-      run: .\mvnw -B package --file pom.xml
-
+    - name: Test and Build with Maven, Build image with pack
+      run: |
+        .\mvnw -B package --file pom.xml
+        .\pack\pack.exe build -e BP_JVM_VERSION=17 --builder="paketobuildpacks/builder:base" -p target\spring-boot-demo-arm64-0.0.1-SNAPSHOT.jar built-on-windows-with-pack:jvm
+      
     - name: Create JVM based container image with spring maven plugin
       run: .\mvnw spring-boot:build-image -D"spring-boot.build-image.imageName=built-on-windows:jvm" -D"spring-boot.build-image.builder=paketobuildpacks/builder:base" -DskipTests
 

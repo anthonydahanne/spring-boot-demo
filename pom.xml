@@ -62,10 +62,16 @@
                         <artifactId>spring-boot-maven-plugin</artifactId>
                         <configuration>
                             <image>
-                                <builder>dashaun/builder:tiny</builder>
-                                <env>
-                                    <BP_NATIVE_IMAGE>true</BP_NATIVE_IMAGE>
-                                </env>
+                                <builder>paketobuildpacks/builder:base</builder>
+                                <buildpacks>
+                                    <buildpack>paketo-buildpacks/ca-certificates</buildpack>
+                                    <buildpack>paketo-buildpacks/bellsoft-liberica</buildpack>
+                                    <buildpack>paketo-buildpacks/syft</buildpack>
+                                    <buildpack>paketo-buildpacks/executable-jar</buildpack>
+                                    <buildpack>paketo-buildpacks/dist-zip</buildpack>
+                                    <buildpack>anthonydahanne/spring-boot:detect</buildpack>
+                                    <buildpack>anthonydahanne/native-image:detect</buildpack>
+                                </buildpacks>
                             </image>
                         </configuration>
                     </plugin>

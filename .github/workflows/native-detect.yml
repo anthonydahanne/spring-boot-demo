@@ -1,0 +1,123 @@
+# This workflow will build a Java project with Maven, and cache/restore any dependencies to improve the workflow execution time
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-java-with-maven
+
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+
+name: Build Spring Boot 3.1.0 Native images with Pack and/or Maven
+
+on:
+  push:
+    branches: [ "native-detect" ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-jar-with-maven-and-build-native-image-with-pack-and-run:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'liberica'
+          cache: maven
+      - name: Test and Build Spring Boot Jar with Maven native Profile
+        run: ./mvnw -B package --file pom.xml -Pnative
+
+      - id: setup-pack
+        uses: buildpacks/github-actions/setup-pack@v5.2.0
+
+      - name: Create Native Docker image with pack
+        run: |
+          pack config default-builder paketobuildpacks/builder:base
+          pack build -p target/spring-boot-demo-0.0.1-SNAPSHOT.jar "${{ env.REGISTRY }}/${{ github.repository }}:maven-and-pack" \
+            -b paketo-buildpacks/ca-certificates \
+            -b paketo-buildpacks/bellsoft-liberica \
+            -b paketo-buildpacks/syft \
+            -b paketo-buildpacks/executable-jar \
+            -b paketo-buildpacks/dist-zip \
+            -b anthonydahanne/spring-boot:detect \
+            -b anthonydahanne/native-image:detect
+
+
+      - name: Run Native based image and asserts application starts up properly
+        run: |
+          docker run --rm --name=spring-boot-demo-detect-maven-and-pack -d -p 8080:8080 "${{ env.REGISTRY }}/${{ github.repository }}:maven-and-pack"
+          sleep 5
+          docker logs -f spring-boot-demo-detect-maven-and-pack &> container.logs &
+          
+          counter=0
+          while [ $counter -lt 10 ]
+          do
+            response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/actuator/health)
+            if [ $response -eq 200 ]; then
+              echo "HTTP 200 OK, app is started properly"
+              echo "shutting down the app"
+              response=$(curl -X POST -s -o /dev/null -w "%{http_code}" localhost:8080/actuator/shutdown)
+              if [ $response -eq 200 ]; then
+                echo "HTTP 200 OK, app shutting now"
+              fi
+              sleep 1
+              cat container.logs
+              exit 0
+            fi
+            counter=$((counter+1))
+            sleep 1
+          done
+          echo "Request failed: HTTP $response, app was never ready"
+          cat container.logs
+          exit 1
+
+  build-jar-and-native-image-with-maven-and-run:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'liberica'
+          cache: maven
+
+      - name: Test and Build Spring Boot Jar and Build native image with Maven native Profile
+        run: |
+          ./mvnw -P native spring-boot:build-image \
+            -Dspring-boot.build-image.imageName="${{ env.REGISTRY }}/${{ github.repository }}:maven-native"
+
+      - name: Run Native based image and asserts application starts up properly
+        run: |
+          docker run --rm --name=spring-boot-demo-detect-maven-native -d -p 8080:8080 ${{ env.REGISTRY }}/${{ github.repository }}:maven-native
+          sleep 5
+          docker logs -f spring-boot-demo-detect-maven-native &> container.logs &
+          
+          counter=0
+          while [ $counter -lt 10 ]
+          do
+            response=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/actuator/health)
+            if [ $response -eq 200 ]; then
+              echo "HTTP 200 OK, app is started properly"
+              echo "shutting down the app"
+              response=$(curl -X POST -s -o /dev/null -w "%{http_code}" localhost:8080/actuator/shutdown)
+              if [ $response -eq 200 ]; then
+                echo "HTTP 200 OK, app shutting now"
+              fi
+              sleep 1
+              cat container.logs
+              exit 0
+            fi
+            counter=$((counter+1))
+            sleep 1
+          done
+          echo "Request failed: HTTP $response, app was never ready"
+          cat container.logs
+          exit 1
